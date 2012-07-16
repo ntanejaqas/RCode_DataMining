@@ -1,0 +1,150 @@
+
+## Work on Example 2: Prostate Cancer on page 2-3 of the text
+###          Also see section 3.2.1 on page 47-49, 3.4.2. on page 57 
+###              and Fig 3.7 on page 61, Fig 3.9 on page 65.             
+
+# read Table
+
+prostate <- read.table(file = "http://www2.isye.gatech.edu/~ymei/7406/Handouts/prostate.csv", 
+ header= TRUE, sep = ",")
+
+# plot Fig 1.1 on page 3
+# collinrarity?
+ 
+library(lattice)
+splom(prostate[,1:9], pscales = 0)
+
+## outliers?
+par(mfrow = c(3,3))
+for (i in 1:9) boxplot(prostate[,i], xlab=names(prostate)[i])
+
+### split the training + test data 
+#prostate[,1:8] <- scale(prostate[,1:8], TRUE, TRUE); 
+
+training <- subset( prostate, train == TRUE)[,1:9];
+test     <- subset( prostate, train == FALSE)[,1:9];
+
+# Table 3.1 (the last column is Y)
+cor(training[1:8]); 
+
+# Table 3.2 (matches those in the 3rd)
+
+model1 <- lm( lpsa ~ ., data = training); 
+summary(model1); 
+
+# Table 3.5
+library(leaps);
+prostate.leaps <- regsubsets(lpsa ~ ., data= training, nbest= 100, really.big= TRUE); 
+prostate.models <- summary(prostate.leaps)$which;
+prostate.models.size <- as.numeric(attr(prostate.models, "dimnames")[[1]]);
+prostate.models.rss <- summary(prostate.leaps)$rss;
+plot(prostate.models.size, prostate.models.rss); 
+
+# add the best subset and results for the only intercept model
+
+prostate.models.best.rss <- tapply(prostate.models.rss, prostate.models.size, min); 
+prostate.model0 <- lm( lpsa ~ 1, data = training); 
+prostate.models.best.rss <- c( sum(resid(prostate.model0)^2), prostate.models.best.rss); 
+
+plot( 0:8, prostate.models.best.rss, type = "b", col= "red", xlab="Subset Size k", ylab="Residual Sum-of-Square")
+points(prostate.models.size, prostate.models.rss)
+
+
+## What is the best subset with k=3
+
+
+op <- which(prostate.models.size == 3); 
+prostate.models.rss[op]
+flag <- op[which.min(prostate.models.rss[op])]; 
+prostate.models[flag,]
+prostate.models.rss[flag]
+
+
+lm1a <- lm( lpsa ~ lcavol + lweight + svi, data = training)
+summary(lm1a)
+sum(resid(lm1a)^2) 
+
+
+## find the best possible LR model, \
+##   one way is backward elimination & drop the least significant until all p-value <= 5%. 
+
+summary(lm( lpsa ~ . - gleason - age - lcp - pgg45 - lbph - svi, data = training)) 
+
+
+####Ridge regression (MASS: lm.ridge, mda: gen.ridge)
+### close to fig 3.7 (difference on x-axis)
+library(MASS);
+prostate.ridge <- lm.ridge( lpsa ~ ., data = training, lambda= seq(0,100,0.01));
+plot(prostate.ridge) 
+select(prostate.ridge)
+## 
+#modified HKB estimator is 3.355691 
+#modified L-W estimator is 3.050708 
+# smallest value of GCV  at 4.92 
+
+# Using lambda = 4.92, we can get the best model:
+
+prostate.ridge$coef[, which(prostate.ridge$lambda == 4.92)]
+
+### compared it with OLS
+prostate.ridge$coef[, which(prostate.ridge$lambda == 0)]
+
+### A trick to compare coef(obj) and obj$coef
+ 
+coef(prostate.ridge)[1,] ## original scale
+prostate.ridge$coef[,1]  ## new scale with "X-scaled" and "Y-centered"
+prostate.ridge$coef[,1] / prostate.ridge$scales
+
+### Fitted value with ridge \lambda = 4.92 
+lambda1 <- 4.92;
+coef1 <- coef(prostate.ridge)[which(prostate.ridge$lambda == lambda1),]
+pred1 <- as.vector(as.matrix(cbind(1, training[,1:8])) %*% coef1)
+ytrue <- training$lpsa; 
+MSE1 <-  mean((pred1 - ytrue)^2); 
+print(MSE1)
+# 0.4473565  (#0.4391998 for OLS)
+
+# For Testing data 
+lamdba1 <- 4.92; 
+coef1 <- coef(prostate.ridge)[which(prostate.ridge$lambda == lamdba1),]
+pred1 <- as.vector(as.matrix(cbind(1, test[,1:8])) %*% coef1)
+ytrue <- test$lpsa; 
+MSE1 <-  mean((pred1 - ytrue)^2);
+print(MSE1)
+# 0.4943582 for lambda=4.92  (#0.521274 for OLS)
+
+
+## LASSO (Fig 3.9)
+
+library(lars)
+prostate.lars <- lars( as.matrix(training[,1:8]), training[,9], type= "lasso", trace= TRUE); 
+plot(prostate.lars)
+
+## select the path with the smallest Cp 
+Cp1  <- summary(prostate.lars)$Cp;
+index1 <- which.min(Cp1);
+
+## Three ways to get beta values
+coef(prostate.lars)[index1,]
+prostate.lars$beta[index1,]
+
+lasso.lambda <- prostate.lars$lambda[index1]
+coef.lars1 <- predict(prostate.lars, s=lasso.lambda, type="coef", mode="lambda")
+coef.lars1$coef
+
+## Fitted value
+## training error for lasso
+fit1 <- predict(prostate.lars, as.matrix(training[,1:8]), s=lasso.lambda, type="fit", mode="lambda");
+yhat <- fit1$fit; 
+mean( (yhat - training$lpsa)^2);  
+
+## 0.4398267  training error for lasso 
+### test error for lasso 
+fit1 <- predict(prostate.lars, as.matrix(test[,1:8]), s=lasso.lambda, type="fit", mode="lambda");
+yhat <- fit1$fit; 
+mean( (yhat - test$lpsa)^2); 
+## 0.5074249  test error for lasso
+
+#play with codes
+coef.lars(prostate.lars, s=lasso.lambda, mode="lambda")
+names(prostate.lars);

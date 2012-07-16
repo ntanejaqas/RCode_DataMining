@@ -1,0 +1,93 @@
+## First, Backfitting to solve 
+## x + 2y = 4
+## 2x + y = 5
+##  (answer: x= 2, y=1)
+
+loop = 20;
+x = rep(0,loop);
+y = rep(0,loop);
+y[1] = (4 - x[1]) /2;
+for (i in 2:loop){
+ x[i] = (5 - y[i-1]) / 2;
+ ## Gauss-Seidel Method
+ y[i] = (4 - x[i]) / 2;
+ ## Jacobi Method
+ ## y[i] = (4 - x[i-1]) / 2;
+}
+cbind(x,y);
+
+
+## Second, Generalized Additive Models
+#http://archive.ics.uci.edu/ml/machine-learning-databases/spambase/
+
+spam <- read.table(file= "http://archive.ics.uci.edu/ml/machine-learning-databases/spambase/spambase.data",
+              sep = ",")
+dim(spam)
+set.seed(123)
+flag <- sort(sample(4601,1536, replace = FALSE))
+spamtrain <- spam[-flag,]
+spamtest <- spam[flag,]
+dim(spamtest[spamtest$V58 ==1,])
+
+###GLM###
+fit1 <- glm( V58  ~ ., family = binomial, data= spamtrain)
+fit1
+
+y1hat <- ifelse(fit1$fitted.values<0.5,0,1)
+y1    <- spamtrain$V58;
+sum(y1hat != y1)/length(y1)
+# 0.06362153 (train error for logistic regression)
+
+p2hat <- predict(fit1,newdata=spamtest[,-58],type="response")
+y2hat <- ifelse(p2hat <0.5,0,1)
+y2    <- spamtest$V58;
+sum(y2hat != y2)/length(y2)
+##  0.06575521 (test error)
+
+
+#Some significant variables
+summary(fit1)
+# V5: word_freq_our
+# V6: word_freq_over
+# V7: word_freq_remove
+# V8: word_freq_internet
+# V16: word_freq_free
+# V17: word_freq_business
+# V52: word_freq_!
+# V53: word_freq_$
+# V56: capital_run_length_longest
+# V57: capital_run_length_total 
+
+
+## Use "step" function to choose a model by AIC in a stepwise algorithm
+
+sfit1 <- step(fit1);
+sfit1$anova
+fit1a <- glm( V58 ~ . -V37 - V13-V34-V31-V55-V50-V32-V11-V40-V18-V14-V51-V3-V30,family = binomial, data= spamtrain)
+
+
+
+##use GAM, try one of the following libraries "gam" or "gmcv" ###
+library(gam)
+#library(gmcv)
+fit2 <- gam( V58 ~ ., family = binomial(link = "logit"), data= spamtrain, trace=TRUE)
+
+## example, test error
+p2hata <-  predict(fit2, spamtest[,-58],type="response")
+y2hata <- ifelse(p2hata <0.5,0,1)
+sum(y2hata != y2)/length(y2)
+## 0.06575521 (test error)
+
+# or use spline
+fit3 <- gam( V58 ~ . + s(V5) + s(V6) + s(V7) + s(V8) + s(V16) + s(V17) + s(V52) + s(V53) + s(V56) + s(V57), family = binomial, data= spamtrain, trace=TRUE)
+##Unfortunately s(.)  will not work
+
+## Training & Test Error 
+y1hatb <- ifelse(fit3$fitted.values<0.5,0,1)
+sum(y1hatb != y1)/length(y1)
+#  0.04763458 (train error vs 0.06362153 for logistic regression)
+## example, test error
+p2hatb <-  predict(fit3, spamtest[,-58],type="response")
+y2hatb <- ifelse(p2hatb <0.5,0,1)
+sum(y2hatb != y2)/length(y2)
+## 0.05794271 (test error, vs 0.06575521 for logistic regression)

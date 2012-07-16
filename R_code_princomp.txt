@@ -1,0 +1,49 @@
+crimes <- read.table(file = "http://www2.isye.gatech.edu/~ymei/7406/Handouts/crimes.csv",
+header= TRUE, sep = ",");
+
+pc1 <- princomp(crimes[,-1], score=T); 
+##The scores=T option will automatically compute the projections 
+##   of the data along the principal component directions.
+
+plot(pc1) # shows a screeplot.
+
+
+pc1$loadings;  ## note that blank entries are small but not zero
+M <- pc1$loading[,1:13]; 
+round(t(M) %*% M,2);     #should ideally produce the 2 by 2 identity matrix
+
+###Values of the first PC
+pc1$scores[,1]
+
+##New data 
+crimesPCA <- cbind(crimes$R, pc1$scores); 
+
+## project the entire data set onto the plane of the first 2 PCs 
+plot(pc1$scores[,1],pc1$scores[,2])
+
+
+### Reproduce scores;
+pc1$center
+pc1$scale
+crimes1 <- NULL;
+for (i in 1:47) crimes1 <- rbind(crimes1, crimes[i,-1] - pc1$center);
+
+##Reproduce Scores of the first obs on the first PC
+ sum(crimes1[1,] * M[,1])
+ pc1$scores[1,1]
+
+### Reproduce scores on the first PC
+t(as.matrix(crimes1) %*% as.matrix(M[,1]))
+pc1$scores[,1]
+
+
+#####how princomp works ###########
+covar = cov( crimes[,-1]);
+eig = eigen(covar);
+val = eig$values;
+sqrt(val);
+pc1
+
+##First PC direction ###
+eig$vectors[,1];
+M[,1]; 

@@ -1,0 +1,122 @@
+# Neural Network
+
+
+#Data 1: Ripley's Data, two classes and each class is from a mixture of two normal dist.
+#  training set (125 obs. from each class); test set (500 from each class)
+
+library(MASS)
+data(synth.tr) #training data
+data(synth.te) # test data
+
+
+plot(synth.tr$xs, synth.tr$ys, col=ifelse(synth.tr$yc==1, "red", "green"), xlab="", ylab=""); 
+
+
+synth.tr$yc <- as.factor(synth.tr$yc);
+synth.te$yc <- as.factor(synth.te$yc);
+
+
+#nnet 
+#
+
+library(nnet)
+
+## Fit a neural network usign 2 hidden units
+
+rip.fit1 <- nnet( yc ~ xs+ys, data = synth.tr, size =2)
+
+# In general we ran the size (# d nodes in the hidden layer) from 10 to 20
+#     and then CV to find the best size
+## Re-fit the neural network with 10 hidden units
+
+rip.fit1 <- nnet( yc ~ xs+ys, data = synth.tr, size =10)
+table(predict(rip.fit1, synth.tr[,-3], type="class"), synth.tr[,3])
+
+# The other important parameter is the factor (decay) or lambda on 
+#     a squared error penalty term, the default is 0
+#
+# We can use tune.nnet() on the training data to estimate the optimal size and decay 
+#     by using 10-fold cross-validation. 
+#
+
+library(e1071);
+model1 <- tune.nnet(yc ~ xs+ys, data = synth.tr, size =10:15, decay = c(0,0.1, 0.01, 0.001));
+summary(model1)
+
+plot(model1);
+model1$best.model
+
+rip.fit1 <- nnet( yc ~ xs+ys, data = synth.tr, size =13, decay = 0.01)
+table(predict(rip.fit1, synth.tr[,-3], type="class"), synth.tr[,3])
+table(predict(rip.fit1, synth.te[,-3], type="class"), synth.te[,3])
+
+#
+## Running again!!! It will give different answers, since neural nets chooses
+##  initialization at random and there are multiple local optima. 
+## We can pool the predictions from multiple run (say by majority vote)
+## to get improved prediction
+
+# Compared to the tree
+
+
+library(rpart)
+rip.fit2 <- rpart( yc ~ xs+ys, data = synth.tr)
+table(predict(rip.fit2, synth.tr[,-3], type="class"), synth.tr[,3])
+table(predict(rip.fit2, synth.te[,-3], type="class"), synth.te[,3])
+
+#      0   1
+#  0 113  20
+#  1  12 105
+#
+#      0   1
+#  0 469  72
+#  1  31 428
+
+
+
+
+
+#Data 2: Fisher's Iris Dat, made up of 150 obs. 
+#        belonging to 3 different classes
+#  
+
+
+library(rpart)
+
+#randomly split data into a training set with 75 obs and a test set with 75 obs
+set.seed(123)
+sub <- c(sample(1:50, 25), sample(51:100, 25), sample(101:150, 25));
+
+###Method1: Tree
+#
+fit1 <- rpart(Species ~ ., data= iris, subset = sub);
+table(predict(fit1, iris[-sub,], type="class"), iris[-sub, "Species"])
+
+#        setosa versicolor virginica
+#  setosa         25          0         0
+#  versicolor      0         24         3
+#  virginica       0          1        22
+
+
+### Method 2: Neural Network
+fit2 <- nnet(Species ~ ., data= iris, subset = sub,  size =2)
+table(predict(fit2, iris[-sub,], type="class"), iris[-sub, "Species"])
+
+#        setosa versicolor virginica
+#  setosa         25          0        0
+#  versicolor      0         23        3
+#  virginica       0          2        22
+
+
+
+### Method 3: Support Vector Machine
+library(e1071)
+fit3 <- svm(Species ~ ., data = iris,subset = sub);
+table(predict(fit3, iris[-sub,], type="class"), iris[-sub, "Species"])
+
+#        setosa versicolor virginica
+#  setosa         25          0        0
+#  versicolor      0         24        3
+#  virginica       0          1        22
+
+

@@ -1,0 +1,116 @@
+library(tseries)
+t.ibm <- get.hist.quote("IBM",start="1962-01-02",end="2012-04-04", quote=c("Open", "High", "Low", "Close","Volume"))
+plot(t.ibm[,c("Close","Volume")],main="IBM stock")
+
+
+##
+ibm <- read.table(file="C:/myajun/Teaching/7406/lecture/ibm.csv", sep = ",", header = TRUE); 
+ibm[1:10,]
+plot(ibm$Close,main="IBM stock", type ="l")
+plot(ibm$Adj.Close,main="IBM stock", type ="l")
+dim(ibm);
+
+
+
+## First, calculate lagged differences of a vector
+##  (x_{t} - x_{t-lag}) / x_{t-lag}
+##
+h.returns <- function(x,h=1) {
+  diff(x,lag=h)/x[1:(length(x)-h)]
+}
+
+embeded.dataset <- function(data,quote="Close",hday=1,emb=10) {
+  ds <- data.frame(embed(h.returns(data[,quote],h=hday),emb+hday))
+  ds <- ds[,c(1,(1+hday):(hday+emb))]
+  names(ds) <- c(paste("r",hday,".f",hday,sep=""),
+               paste("r",hday,".t",0:(emb-1),sep=""))
+  ds$Date <- data[(hday+emb):(nrow(data)-hday),"Date"]
+  ds
+}
+ibm.data <- embeded.dataset(ibm,hday=1)
+
+
+plot(ibm.data[,1],main="IBM stock", type ="l")
+dim(ibm.data)
+## Split the data to training and test data
+ibm.train <- ibm.data[1:9000,]
+ibm.test <- ibm.data[9001:nrow(ibm.data),]
+
+## For instance, we use nnet to build a model
+## recall that nnet may not lead the same results
+##   when you run the code multiple times
+##
+library(nnet)
+ibmnn <- nnet(r1.f1 ~ .,data=ibm.train[,-ncol(ibm.train)],
+  linout=T,size=10,decay=0.01,maxit=1000)
+summary(ibmnn);
+
+ibmnn.preds <- predict(ibmnn,ibm.test)
+
+## The following code gives as a graph with the predictions 
+##  plotted against the true values
+
+plot(ibm.test[,1],ibmnn.preds,ylim=c(-0.01,0.01),
+  main="Neural Net Results",xlab="True",ylab="NN predictions")
+ abline(h=0,v=0); abline(0,1,lty=2)
+
+
+
+## Unit Root simulation
+## \beta = 0.8 versus \beta = 1 (Unit root)
+mu = 2;
+leng = 500;
+data <- c(0,0); 
+dat <- data - mu;
+for (i in 1:leng){
+ dat <- c(0.8,1)*dat + rnorm(1); 
+ data <- rbind(data, dat+mu);
+}
+
+
+## Error Prob of fixed Sample Test
+
+p <- 0.45; sum(dnom(61:121,121,p))
+p <- 0.55; sum(dnom(61:121,121,p))
+
+### R code for SPRT
+
+set.seed(111);
+loop <- 2500;
+n <- 121;
+theta <- 0.45;
+NN <- rep(0, loop);
+DD <- rep(0, loop);
+for (i in 1:loop){
+ Sstar <- 0;
+ j <- 0;
+ while(abs(Sstar) < 11) {
+   j <- j+1;
+   Sstar <- Sstar + 2* rbinom(1,1,theta) -1;
+ }
+ NN[i] <- j; 
+ DD[i] <- (sign(Sstar)+1) / 2;
+}
+mean(NN);
+hist(NN);
+mean(DD);  
+
+### If we require the 
+maximum sample = 121
+set.seed(111);
+loop <- 20000;
+n <- 121;
+theta <- 0.45;
+NN <- rep(0, loop);
+DD <- rep(0, loop);
+for (i in 1:loop){
+ xx       <- rbinom(n,1,theta);
+ Sstar    <- rep(0,n);
+ Sstar[1] <- 2*xx[1] - 1;  
+ for (j in 2:n) Sstar[j] = Sstar[j-1] + 2* xx[j] -1;
+ if (max(abs(Sstar)) >=  12) 
+  { j0 <- match(max(abs(Sstar)), abs(Sstar)); NN[i] <- j0; DD[i] <- (sign(Sstar[j0])+1) / 2;}
+ else { NN[i] <- n; DD[i]<- (sign(Sstar[n])+1) / 2;}
+}
+mean(NN);
+mean(DD);  
